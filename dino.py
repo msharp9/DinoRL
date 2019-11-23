@@ -34,11 +34,9 @@ class Bot:
 
     def jump(self):
         pyautogui.keyUp('down')
-        pyautogui.press('space')
-        # press is clean but is affected by the PAUSE attribute
-        # pyautogui.keyDown('space')
-        # time.sleep(0.05)
-        # pyautogui.keyUp('space')
+        pyautogui.keyDown('space')
+        time.sleep(0.05)
+        pyautogui.keyUp('space')
 
     def short_jump(self):
         pyautogui.keyUp('down')
@@ -53,9 +51,7 @@ class Bot:
         """
         Area right in front of dino.
         """
-        # img = pyautogui.screenshot(region=self.observation_area)
         sct = self.mss.grab(self.observation_area)
-        # tools.to_png(sct.rgb, sct.size, output='test.png')
         img = Image.frombytes("RGB", sct.size, sct.bgra, "raw", "BGRX")
         gray_img = ImageOps.grayscale(img)
         arr = np.array(gray_img)
@@ -85,7 +81,6 @@ class Bot:
             # print(time.time() - start)
             if self.mean_pixel(self.detection_area()) < BA_THRESHOLD:
                 self.jump()
-                # self.short_jump()
 
 if __name__ == "__main__":
     bot = Bot()
