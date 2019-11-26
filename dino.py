@@ -24,10 +24,9 @@ class Bot:
             sys.exit()
         self.restart_coords = pyautogui.center(self.area)
         self.observation_area = {"top": self.area.top + 110,
-            "left": self.area.left +130, "width": 140, "height": 100}
-        self.gameover_area = np.sum([list(self.area), [250,60,0,0]], axis=0)
-        self.gameover_area[2] = 250 #width
-        self.gameover_area[3] = 40 #height
+            "left": self.area.left + 130, "width": 140, "height": 100}
+        self.gameover_area = {"top": self.area.top + 60,
+            "left": self.area.left + 250, "width": 250, "height": 40}
         self.mss = mss()
 
     def restart(self):
@@ -42,9 +41,7 @@ class Bot:
     async def jump(self):
         pyautogui.keyUp('down')
         pyautogui.keyDown('space')
-        # print('press down')
         await asyncio.sleep(0.05)
-        # print('press up')
         pyautogui.keyUp('space')
 
     def short_jump(self):
@@ -70,8 +67,16 @@ class Bot:
         return arr.mean()
 
     def check_dead(self):
-        return pyautogui.locateOnScreen('gameover.png', confidence=0.9,
-            region=tuple(self.gameover_area), grayscale=True, step=2)
+        sct = self.mss.grab(self.gameover_area)
+        img = Image.frombytes("RGB", sct.size, sct.bgra, "raw", "BGRX")
+        gray_img = ImageOps.grayscale(img)
+        arr = np.array(gray_img)
+        mpixel = self.mean_pixel(arr)
+        return mpixel > 230 and mpixel < 239
+        # return pyautogui.locateOnScreen('gameover.png', confidence=0.9,
+        #     region=tuple(self.gameover_area), grayscale=True, step=2)
+        # template matching is slow, better to use average pixel matching
+        # always better to use a faster algorithm that worry about multithreading
 
     def random_agent(self):
         self.restart()
@@ -86,9 +91,8 @@ class Bot:
             else:
                 self.walk()
 
-    async def sync_jump(self, thresh):
+    async def basic_jump(self, thresh):
         while True:
-            # print('test1')
             arr, img = self.detection_area()
             mpixel = self.mean_pixel(arr)
             if mpixel > 150 and mpixel < thresh:
@@ -101,7 +105,7 @@ class Bot:
         dead = None
         while not dead:
             dead = self.check_dead()
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.05)
 
     def basic_agent(self):
         BA_THRESHOLD = 241
@@ -111,15 +115,14 @@ class Bot:
         loop = asyncio.get_event_loop()
         done, pending = loop.run_until_complete(
             asyncio.wait([asyncio.ensure_future(self.sync_is_dead()),
-                asyncio.ensure_future(self.sync_jump(BA_THRESHOLD))],
+                asyncio.ensure_future(self.basic_jump(BA_THRESHOLD))],
                 return_when=asyncio.FIRST_COMPLETED))
 
         for task in pending:
-            # print(task)
             task.cancel()
         # print(time.time() - start)
 
 if __name__ == "__main__":
     bot = Bot()
-    # bot.random_agent()
-    bot.basic_agent()
+    bot.random_agent()
+    # bot.basic_agent()
