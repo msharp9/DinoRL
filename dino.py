@@ -7,11 +7,13 @@ import numpy as np
 import random
 
 import sys
+import os
 from mss import mss
 import mss.tools as tools
 
 import asyncio
 import imageio
+import cv2
 
 from collections import deque
 import keras
@@ -73,9 +75,9 @@ class DDQN_brain():
             self.epsilon_decay_step = 0
 
         # parameters about training
-        self.batch_size = 128
-        self.train_start = 10000
-        self.update_target_rate = 10000
+        self.batch_size = 32
+        self.train_start = 500
+        self.update_target_rate = 1000
         self.no_op_steps = 30
 
         self.update_target_model()
@@ -195,6 +197,8 @@ class Bot(DDQN_brain):
     """Bot for playing Chrome dino run game"""
     def __init__(self, action_space=None, gif=False, grad_cam=False,
             **kwargs):
+        super().__init__(**kwargs)
+
         self.area = pyautogui.locateOnScreen('dino_start.png', confidence=0.9,
             grayscale=True)
         # self.area = [631, 265, 729, 225]
@@ -209,6 +213,7 @@ class Bot(DDQN_brain):
         self.mss = mss()
         self.start = time.time()
         self.time = 0
+        self.steps = 0
 
         self.gif = gif
         self.gifimages = []
@@ -263,8 +268,22 @@ class Bot(DDQN_brain):
         img = Image.frombytes("RGB", sct.size, sct.bgra, "raw", "BGRX")
         gray_img = ImageOps.grayscale(img)
         arr = np.array(gray_img)
-        print(arr.shape)
         return arr, img
+
+    def play_area(self):
+        sct = self.mss.grab(self.area)
+        img = Image.frombytes("RGB", sct.size, sct.bgra, "raw", "BGRX")
+        return img
+
+    def save_gif(self, img):
+        gifpic = img.copy()
+        if self.action is not None:
+            cv2.putText(gifpic, self.choicestext[self.action], (100, 10),
+                cv2.FONT_HERSHEY_PLAIN, 0.8, (255,255,255), 1, cv2.LINE_AA)
+            # if self.grad_cam and gifpic.shape == self.history.shape[1:2]:
+            #     heatmap = self.grad_cam_heatmap(self.action, self.history)
+            #     gifpic = self.merge_heatmap(gifpic, heatmap)
+        self.gifimages.append(gifpic)
 
     def mean_pixel(self, arr):
         return arr.mean()
@@ -296,6 +315,9 @@ class Bot(DDQN_brain):
             mpixel = self.mean_pixel(arr)
             if mpixel > 150 and mpixel < thresh:
                 await self.jump()
+                # await self.duck()
+                # await self.short_jump()
+                # await self.walk()
                 # print("mpixel: {}".format(mpixel))
                 # img.show()
             await asyncio.sleep(0.01)
@@ -321,14 +343,28 @@ class Bot(DDQN_brain):
             task.cancel()
         # print(time.time() - start)
 
-    async def rl_agent(self, history):
+    def rl_agent(self):
+        self.restart()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        done, pending = loop.run_until_complete(
+            asyncio.wait([asyncio.ensure_future(self.sync_is_dead()),
+                asyncio.ensure_future(self.take_steps())],
+                return_when=asyncio.FIRST_COMPLETED))
+        for task in pending:
+            task.cancel()
+        loop.stop()
+        self.on_end()
 
 
-        try:
-            await self.choices[int(self.action)]
-        except Exception as e:
-            print(str(e))
-            pass
+    async def take_steps(self):
+        while True:
+            try:
+                await self.on_step()
+            except Exception as e:
+                print("Exception raised. Failed to run step.")
+                print(str(e))
+                pass
 
     def choose_action(self, history):
         history = np.float32(history / 255.0)
@@ -341,14 +377,16 @@ class Bot(DDQN_brain):
 
     async def on_step(self):
         _observation, _img = self.detection_area()
+        if self.gif:
+            self.save_gif(self.play_area)
         _time = time.time()
         if self.action is not None:
             _observation = np.reshape([_observation], (1, 100, 140, 1))
             _history = np.append(_observation, self.history[:,:,:,:3], axis=3)
+            self.reward = _time - self.time
             self.replay_memory(self.history, self.action, self.reward, _history, False)
             self.train_replay()
-            self.reward = _time - self.time
-            print(self.reward)
+            # print(self.reward)
             self.tot_reward += self.reward
             self.global_step += 1
             if self.global_step % self.update_target_rate == 0:
@@ -356,23 +394,35 @@ class Bot(DDQN_brain):
         else:
             _history = np.stack((_observation, _observation, _observation, _observation), axis=2)
             _history = np.reshape([_history], (1, 100, 140, 4))
+        self.time = _time
         self._history = self.history
         self.history = _history
-        self.time = _time
         self.action = self.choose_action(_history)
+
+        self.avg_q_max += np.amax(self.model.predict(np.float32(self.history/255.))[0])
+        self.steps += 1
+
+        try:
+            # print(self.action)
+            await self.choices[self.action]()
+        except Exception as e:
+            print("Exception raised. Failed to run choices.")
+            print(str(e))
+            pass
 
     def on_end(self):
         print('--- on_end called ---')
+        pyautogui.keyUp('down') #unpress keys
 
         self.replay_memory(self._history,self.action,-10,self.history,True)
         self.train_replay()
         self.global_step += 1
 
         with open(self.record,"a") as f:
-            #Model, TimeStamp, Reward, Steps, avg_q_max, avg_loss
-            f.write("{}, {}, {}, {}, {}, {}\n".format(self.model,
+            #Model, TimeStamp, Reward, Game_time, Steps, avg_q_max, avg_loss
+            f.write("{}, {}, {}, {}, {}, {}, {}\n".format(self.model,
                 int(time.time()), self.tot_reward, time.time()-self.start,
-                self.avg_q_max/self.time, self.avg_loss/self.time))
+                self.steps, self.avg_q_max/self.steps, self.avg_loss/self.steps))
 
         if self.model_path:
             self.model.save_weights(self.model_path)
@@ -386,8 +436,12 @@ class Bot(DDQN_brain):
 
 
 if __name__ == "__main__":
-    bot = Bot()
+    # bot = Bot()
     # bot.random_agent()
     # bot.basic_agent()
     # bot.rl_agent()
-    bot.detection_area()
+    # bot.detection_area()
+    bot = Bot()
+    for episode in range(10):
+        bot.rl_agent()
+        time.sleep(5)

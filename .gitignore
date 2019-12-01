@@ -1,0 +1,8 @@
+# data stores
+records/*
+model/*
+replays/*
+
+# test/examples
+examples/*
+*test*
