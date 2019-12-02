@@ -67,7 +67,7 @@ class DDQN_brain():
         self.gamma = reward_decay
         self.epsilon = epsilon
         self.epsilon_end = 0.05
-        self.exploration_steps = 1000000.
+        self.exploration_steps = 10000.
         if explore:
             self.epsilon_decay_step = (self.epsilon - self.epsilon_end) \
                                   / self.exploration_steps
@@ -441,7 +441,8 @@ if __name__ == "__main__":
     # bot.basic_agent()
     # bot.rl_agent()
     # bot.detection_area()
-    bot = Bot()
-    for episode in range(10):
+    bot = Bot(explore=True)
+    for episode in range(1000):
+        print('Episode: '+str(episode))
         bot.rl_agent()
         time.sleep(5)
