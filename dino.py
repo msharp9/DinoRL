@@ -75,7 +75,7 @@ class DDQN_brain():
             self.epsilon_decay_step = 0
 
         # parameters about training
-        self.batch_size = 32
+        self.batch_size = 128
         self.train_start = 500
         self.update_target_rate = 1000
         self.no_op_steps = 30
@@ -344,7 +344,14 @@ class Bot(DDQN_brain):
         # print(time.time() - start)
 
     def rl_agent(self):
+        self.start = time.time()
+        self.time = 0
+        self.steps = 0
+        self.avg_q_max, self.avg_loss = 0, 0
+        self.gifimages = []
+
         self.restart()
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         done, pending = loop.run_until_complete(
@@ -385,7 +392,7 @@ class Bot(DDQN_brain):
             _history = np.append(_observation, self.history[:,:,:,:3], axis=3)
             self.reward = _time - self.time
             self.replay_memory(self.history, self.action, self.reward, _history, False)
-            self.train_replay()
+            # self.train_replay()
             # print(self.reward)
             self.tot_reward += self.reward
             self.global_step += 1
@@ -416,6 +423,8 @@ class Bot(DDQN_brain):
 
         self.replay_memory(self._history,self.action,-10,self.history,True)
         self.train_replay()
+        for _ in range(self.steps):
+            self.train_replay()
         self.global_step += 1
 
         with open(self.record,"a") as f:
@@ -445,4 +454,8 @@ if __name__ == "__main__":
     for episode in range(1000):
         print('Episode: '+str(episode))
         bot.rl_agent()
-        time.sleep(5)
+        ga = bot.gameover_area
+        ga = [ga["left"], ga["top"], ga["width"], ga["height"]]
+        while not pyautogui.locateOnScreen('gameover.png', confidence=0.9,
+            region=tuple(ga), grayscale=True, step=2):
+            time.sleep(1)
