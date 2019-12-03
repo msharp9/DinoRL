@@ -26,10 +26,12 @@ from keras.layers.convolutional import Conv2D
 from keras import backend as K
 
 pyautogui.FAILSAFE = True
-pyautogui.PAUSE = 0.1
+pyautogui.PAUSE = 0.01
 
 config = tf.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.6
+
+HEADLESS = False
 
 class DDQN_brain():
     memory = deque(maxlen=30000)
@@ -206,6 +208,8 @@ class Bot(DDQN_brain):
             print("Game area could not be found. Please load up a new game at http://www.trex-game.skipser.com/.")
             sys.exit()
         self.restart_coords = pyautogui.center(self.area)
+        self.area_display = {"top": self.area.top, "left": self.area.left,
+            "width": self.area.width, "height": self.area.height}
         self.observation_area = {"top": self.area.top + 110,
             "left": self.area.left + 130, "width": 140, "height": 100}
         self.gameover_area = {"top": self.area.top + 60,
@@ -345,9 +349,15 @@ class Bot(DDQN_brain):
 
     def rl_agent(self):
         self.start = time.time()
-        self.time = 0
+        self.time = self.start
         self.steps = 0
+
+        self.history = None
+        self.action = None
+        self.reward = 0
+        self.tot_reward = 0
         self.avg_q_max, self.avg_loss = 0, 0
+
         self.gifimages = []
 
         self.restart()
@@ -382,8 +392,24 @@ class Bot(DDQN_brain):
             action = random.randrange(0,4)
         return action
 
+    async def display(self, area):
+        sct = self.mss.grab(area)
+        img = Image.frombytes("RGB", sct.size, sct.bgra, "raw", "BGRX")
+        img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        if self.action is not None:
+            cv2.putText(img, self.choicestext[self.action], (0, 20),
+                cv2.FONT_HERSHEY_PLAIN, 1, (255,0,0), 2, cv2.LINE_AA)
+            # if self.grad_cam:
+            #     heatmap = self.grad_cam_heatmap(self.action, self.history)
+            #     resized = self.merge_heatmap(resized, heatmap)
+        cv2.imshow("Dino Bot", img)
+        cv2.waitKey(1)
+        # await asyncio.sleep(0.01)
+
     async def on_step(self):
+        print("Before observe {}".format(time.time()-self.time))
         _observation, _img = self.detection_area()
+        print("After observe {}".format(time.time()-self.time))
         if self.gif:
             self.save_gif(self.play_area)
         _time = time.time()
@@ -391,6 +417,7 @@ class Bot(DDQN_brain):
             _observation = np.reshape([_observation], (1, 100, 140, 1))
             _history = np.append(_observation, self.history[:,:,:,:3], axis=3)
             self.reward = _time - self.time
+            print(self.reward)
             self.replay_memory(self.history, self.action, self.reward, _history, False)
             # self.train_replay()
             # print(self.reward)
@@ -401,17 +428,27 @@ class Bot(DDQN_brain):
         else:
             _history = np.stack((_observation, _observation, _observation, _observation), axis=2)
             _history = np.reshape([_history], (1, 100, 140, 4))
+        print("After History {}".format(time.time()-self.time))
         self.time = _time
+        print("After time update {}".format(time.time()-self.time))
         self._history = self.history
         self.history = _history
+        print("Before action choice {}".format(time.time()-self.time))
         self.action = self.choose_action(_history)
+        print("After action choice {}".format(time.time()-self.time))
 
         self.avg_q_max += np.amax(self.model.predict(np.float32(self.history/255.))[0])
         self.steps += 1
+        print("before action run {}".format(time.time()-self.time))
 
         try:
             # print(self.action)
             await self.choices[self.action]()
+            print("After action run {}".format(time.time()-self.time))
+            if not HEADLESS:
+                pass
+                # await self.display(self.observation_area)
+                # await self.display(self.area_display)
         except Exception as e:
             print("Exception raised. Failed to run choices.")
             print(str(e))
