@@ -36,7 +36,9 @@ HEADLESS = False
 class DDQN_brain():
     memory = deque(maxlen=30000)
     global_step = 0
-    state_size = (100, 140, 4)
+    height = 100
+    width = 300
+    state_size = (height, width, 4)
     action_size = 4
 
     def build_model(state_size, action_size):
@@ -78,8 +80,8 @@ class DDQN_brain():
 
         # parameters about training
         self.batch_size = 128
-        self.train_start = 500
-        self.update_target_rate = 1000
+        self.train_start = 1000
+        self.update_target_rate = 5000
         self.no_op_steps = 30
 
         self.update_target_model()
@@ -210,8 +212,8 @@ class Bot(DDQN_brain):
         self.restart_coords = pyautogui.center(self.area)
         self.area_display = {"top": self.area.top, "left": self.area.left,
             "width": self.area.width, "height": self.area.height}
-        self.observation_area = {"top": self.area.top + 110,
-            "left": self.area.left + 130, "width": 140, "height": 100}
+        self.observation_area = {"top": self.area.top + 80,
+            "left": self.area.left + 80, "width": self.width, "height": self.height}
         self.gameover_area = {"top": self.area.top + 60,
             "left": self.area.left + 250, "width": 250, "height": 40}
         self.mss = mss()
@@ -282,8 +284,8 @@ class Bot(DDQN_brain):
     def save_gif(self, img):
         gifpic = img.copy()
         if self.action is not None:
-            cv2.putText(gifpic, self.choicestext[self.action], (100, 10),
-                cv2.FONT_HERSHEY_PLAIN, 0.8, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(gifpic, self.choicestext[self.action], (0, 20),
+                cv2.FONT_HERSHEY_PLAIN, 0.8, (0,255,0), 1, cv2.LINE_AA)
             # if self.grad_cam and gifpic.shape == self.history.shape[1:2]:
             #     heatmap = self.grad_cam_heatmap(self.action, self.history)
             #     gifpic = self.merge_heatmap(gifpic, heatmap)
@@ -407,17 +409,14 @@ class Bot(DDQN_brain):
         # await asyncio.sleep(0.01)
 
     async def on_step(self):
-        print("Before observe {}".format(time.time()-self.time))
         _observation, _img = self.detection_area()
-        print("After observe {}".format(time.time()-self.time))
         if self.gif:
             self.save_gif(self.play_area)
         _time = time.time()
         if self.action is not None:
-            _observation = np.reshape([_observation], (1, 100, 140, 1))
+            _observation = np.reshape([_observation], (1, self.height, self.width, 1))
             _history = np.append(_observation, self.history[:,:,:,:3], axis=3)
             self.reward = _time - self.time
-            print(self.reward)
             self.replay_memory(self.history, self.action, self.reward, _history, False)
             # self.train_replay()
             # print(self.reward)
@@ -427,27 +426,21 @@ class Bot(DDQN_brain):
                 self.update_target_model()
         else:
             _history = np.stack((_observation, _observation, _observation, _observation), axis=2)
-            _history = np.reshape([_history], (1, 100, 140, 4))
-        print("After History {}".format(time.time()-self.time))
+            _history = np.reshape([_history], (1, self.height, self.width, 4))
         self.time = _time
-        print("After time update {}".format(time.time()-self.time))
         self._history = self.history
         self.history = _history
-        print("Before action choice {}".format(time.time()-self.time))
         self.action = self.choose_action(_history)
-        print("After action choice {}".format(time.time()-self.time))
 
         self.avg_q_max += np.amax(self.model.predict(np.float32(self.history/255.))[0])
         self.steps += 1
-        print("before action run {}".format(time.time()-self.time))
 
         try:
             # print(self.action)
             await self.choices[self.action]()
-            print("After action run {}".format(time.time()-self.time))
             if not HEADLESS:
-                pass
-                # await self.display(self.observation_area)
+                # pass
+                await self.display(self.observation_area)
                 # await self.display(self.area_display)
         except Exception as e:
             print("Exception raised. Failed to run choices.")
@@ -485,8 +478,7 @@ if __name__ == "__main__":
     # bot = Bot()
     # bot.random_agent()
     # bot.basic_agent()
-    # bot.rl_agent()
-    # bot.detection_area()
+
     bot = Bot(explore=True)
     for episode in range(1000):
         print('Episode: '+str(episode))
