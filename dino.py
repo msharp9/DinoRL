@@ -31,7 +31,7 @@ pyautogui.PAUSE = 0.01
 config = tf.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.6
 
-HEADLESS = False
+# HEADLESS = False
 
 class DDQN_brain():
     memory = deque(maxlen=30000)
@@ -151,7 +151,7 @@ class DDQN_brain():
 
     def merge_heatmap(self, img, heatmap):
         heatmap = cv2.resize(heatmap, (img.shape[1],img.shape[0]))
-        img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
+        # img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
         superimposed_img = heatmap*0.4 + img
         return superimposed_img
 
@@ -191,7 +191,8 @@ class DDQN_brain():
                 # the key point of Double DQN
                 # selection of action is from model
                 # update is from target model
-                target[i] = reward[i] + self.gamma * target_value[i][np.argmax(value[i])]
+                target[i] = reward[i] + self.gamma * \
+                    target_value[i][np.argmax(value[i])]
 
         loss = self.optimizer([history, action, target])
         self.avg_loss += loss[0]
@@ -199,31 +200,25 @@ class DDQN_brain():
 
 class Bot(DDQN_brain):
     """Bot for playing Chrome dino run game"""
-    def __init__(self, action_space=None, gif=False, grad_cam=False,
-            **kwargs):
+    def __init__(self, action_space=None, **kwargs):
         super().__init__(**kwargs)
 
         self.area = pyautogui.locateOnScreen('dino_start.png', confidence=0.9,
             grayscale=True)
         # self.area = [631, 265, 729, 225]
         if not self.area:
-            print("Game area could not be found. Please load up a new game at http://www.trex-game.skipser.com/.")
+            print("Game area could not be found. Please load up a new game at \
+http://www.trex-game.skipser.com/.")
             sys.exit()
         self.restart_coords = pyautogui.center(self.area)
         self.area_display = {"top": self.area.top, "left": self.area.left,
             "width": self.area.width, "height": self.area.height}
         self.observation_area = {"top": self.area.top + 80,
-            "left": self.area.left + 80, "width": self.width, "height": self.height}
+            "left": self.area.left + 80,
+            "width": self.width, "height": self.height}
         self.gameover_area = {"top": self.area.top + 60,
             "left": self.area.left + 250, "width": 250, "height": 40}
         self.mss = mss()
-        self.start = time.time()
-        self.time = 0
-        self.steps = 0
-
-        self.gif = gif
-        self.gifimages = []
-        self.grad_cam = grad_cam
 
         # ADDED THE CHOICES #
         self.choices = {0: self.duck,
@@ -277,19 +272,17 @@ class Bot(DDQN_brain):
         return arr, img
 
     def play_area(self):
-        sct = self.mss.grab(self.area)
+        sct = self.mss.grab(self.area_display)
         img = Image.frombytes("RGB", sct.size, sct.bgra, "raw", "BGRX")
         return img
 
-    def save_gif(self, img):
+    def save_gif(self, img, store):
         gifpic = img.copy()
+        gifpic = cv2.cvtColor(np.array(gifpic), cv2.COLOR_RGB2BGR)
         if self.action is not None:
             cv2.putText(gifpic, self.choicestext[self.action], (0, 20),
                 cv2.FONT_HERSHEY_PLAIN, 0.8, (0,255,0), 1, cv2.LINE_AA)
-            # if self.grad_cam and gifpic.shape == self.history.shape[1:2]:
-            #     heatmap = self.grad_cam_heatmap(self.action, self.history)
-            #     gifpic = self.merge_heatmap(gifpic, heatmap)
-        self.gifimages.append(gifpic)
+        store.append(gifpic)
 
     def mean_pixel(self, arr):
         return arr.mean()
@@ -349,7 +342,7 @@ class Bot(DDQN_brain):
             task.cancel()
         # print(time.time() - start)
 
-    def rl_agent(self):
+    def rl_agent(self, gif=False, grad_cam=False, replay=False, headless=False):
         self.start = time.time()
         self.time = self.start
         self.steps = 0
@@ -360,7 +353,14 @@ class Bot(DDQN_brain):
         self.tot_reward = 0
         self.avg_q_max, self.avg_loss = 0, 0
 
+        self.gif = gif
         self.gifimages = []
+        self.grad_cam = grad_cam
+        self.gc_images = []
+
+        self.replay = replay
+        self.replay_data = []
+        self.headless = headless
 
         self.restart()
 
@@ -410,14 +410,22 @@ class Bot(DDQN_brain):
 
     async def on_step(self):
         _observation, _img = self.detection_area()
-        if self.gif:
-            self.save_gif(self.play_area)
+        if self.gif == "AI":
+            self.save_gif(_img, self.gifimages)
+        elif self.gif:
+            self.save_gif(self.play_area(), self.gifimages)
+
+        if self.grad_cam:
+            self.save_gif(_img, self.gc_images)
+
         _time = time.time()
         if self.action is not None:
-            _observation = np.reshape([_observation], (1, self.height, self.width, 1))
+            _observation = np.reshape([_observation],
+                (1, self.height, self.width, 1))
             _history = np.append(_observation, self.history[:,:,:,:3], axis=3)
-            self.reward = _time - self.time
-            self.replay_memory(self.history, self.action, self.reward, _history, False)
+            # self.reward = _time - self.time
+            self.replay_memory(self.history, self.action,
+                self.reward, _history, False)
             # self.train_replay()
             # print(self.reward)
             self.tot_reward += self.reward
@@ -425,23 +433,30 @@ class Bot(DDQN_brain):
             if self.global_step % self.update_target_rate == 0:
                 self.update_target_model()
         else:
-            _history = np.stack((_observation, _observation, _observation, _observation), axis=2)
+            _history = np.stack((_observation, _observation,
+                _observation, _observation), axis=2)
             _history = np.reshape([_history], (1, self.height, self.width, 4))
         self.time = _time
         self._history = self.history
         self.history = _history
         self.action = self.choose_action(_history)
 
-        self.avg_q_max += np.amax(self.model.predict(np.float32(self.history/255.))[0])
+        if self.replay or self.grad_cam:
+            # y = np.zeros(4)
+            # y[self.action] = 1
+            self.replay_data.append([self.action, _history])
+
+        self.avg_q_max += np.amax(self.model.predict(
+            np.float32(self.history/255.))[0])
         self.steps += 1
 
         try:
             # print(self.action)
             await self.choices[self.action]()
-            if not HEADLESS:
-                pass
-                # await self.display(self.observation_area)
-                # await self.display(self.area_display)
+            if self.headless == "AI":
+                await self.display(self.observation_area)
+            elif self.headless:
+                await self.display(self.area_display)
         except Exception as e:
             print("Exception raised. Failed to run choices.")
             print(str(e))
@@ -469,9 +484,22 @@ class Bot(DDQN_brain):
             self.model.save_weights('model/ddqn.h5')
 
         if self.gif:
-            imageio.mimsave(self.gif,
-              [np.array(img) for i, img in enumerate(self.gifimages) if i%2 == 0],
-              fps=30)
+            imageio.mimsave("gifs/{}.gif".format(int(time.time())),
+              # [np.array(img) for i, img in enumerate(self.gifimages) if i%2==0],
+              [np.array(img) for img in self.gifimages], fps=20)
+
+        if self.replay:
+            np.save("replays/{}.npy".format(int(time.time())),
+                np.array(self.replay_data))
+
+        if self.grad_cam:
+            gcam_pics = []
+            for [action, history], gif in zip(self.replay_data, self.gc_images):
+                heatmap = self.grad_cam_heatmap(action, history)
+                gcam_pic = self.merge_heatmap(gif, heatmap)
+                gcam_pics.append(gcam_pic)
+            imageio.mimsave("gifs/gcam_{}.gif".format(int(time.time())),
+                [np.array(img) for img in gcam_pics], fps=20)
 
 
 if __name__ == "__main__":
@@ -481,9 +509,10 @@ if __name__ == "__main__":
 
     # bot = Bot(explore=True)
     bot= Bot()
-    for episode in range(1000):
+    for episode in range(1):
         print('Episode: '+str(episode))
         bot.rl_agent()
+        # bot.rl_agent(gif=True,grad_cam=True,replay=True)
         ga = bot.gameover_area
         ga = [ga["left"], ga["top"], ga["width"], ga["height"]]
         while not pyautogui.locateOnScreen('gameover.png', confidence=0.9,

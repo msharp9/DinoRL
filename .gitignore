@@ -2,6 +2,7 @@
 records/*
 model/*
 replays/*
+gifs/*
 
 # test/examples
 examples/*
