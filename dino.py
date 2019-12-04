@@ -249,7 +249,7 @@ class Bot(DDQN_brain):
 
     async def duck(self):
         pyautogui.keyDown('down')
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.02)
 
     async def jump(self):
         pyautogui.keyUp('down')
@@ -264,7 +264,7 @@ class Bot(DDQN_brain):
 
     async def walk(self):
         pyautogui.keyUp('down')
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.02)
 
     def detection_area(self):
         """
@@ -332,7 +332,7 @@ class Bot(DDQN_brain):
         dead = None
         while not dead:
             dead = self.check_dead()
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.01)
 
     def basic_agent(self):
         BA_THRESHOLD = 241
@@ -439,8 +439,8 @@ class Bot(DDQN_brain):
             # print(self.action)
             await self.choices[self.action]()
             if not HEADLESS:
-                # pass
-                await self.display(self.observation_area)
+                pass
+                # await self.display(self.observation_area)
                 # await self.display(self.area_display)
         except Exception as e:
             print("Exception raised. Failed to run choices.")
@@ -479,7 +479,8 @@ if __name__ == "__main__":
     # bot.random_agent()
     # bot.basic_agent()
 
-    bot = Bot(explore=True)
+    # bot = Bot(explore=True)
+    bot= Bot()
     for episode in range(1000):
         print('Episode: '+str(episode))
         bot.rl_agent()
