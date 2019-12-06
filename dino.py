@@ -380,6 +380,7 @@ http://www.trex-game.skipser.com/.")
         while True:
             try:
                 await self.on_step()
+                await asyncio.sleep(0.001)
             except Exception as e:
                 print("Exception raised. Failed to run step.")
                 print(str(e))
@@ -465,6 +466,7 @@ http://www.trex-game.skipser.com/.")
     def on_end(self):
         print('--- on_end called ---')
         pyautogui.keyUp('down') #unpress keys
+        pyautogui.keyUp('space')
 
         self.replay_memory(self._history,self.action,-10,self.history,True)
         self.train_replay()
@@ -509,9 +511,10 @@ if __name__ == "__main__":
 
     # bot = Bot(explore=True)
     bot= Bot()
-    for episode in range(1):
+    bot.rl_agent(gif=True,grad_cam=True)
+    for episode in range(1000):
         print('Episode: '+str(episode))
-        bot.rl_agent()
+        bot.rl_agent(replay=True)
         # bot.rl_agent(gif=True,grad_cam=True,replay=True)
         ga = bot.gameover_area
         ga = [ga["left"], ga["top"], ga["width"], ga["height"]]
