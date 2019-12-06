@@ -11,3 +11,5 @@ Then run:
 ```
 python dino.py
 ```
+
+![DinoRL - animated gif demo](pics/example.gif)
