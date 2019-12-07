@@ -173,11 +173,18 @@ class DDQN_brain():
         action, reward, dead = [], [], []
 
         for i in range(self.batch_size):
-            history[i] = np.float32(mini_batch[i][0] / 255.)
-            next_history[i] = np.float32(mini_batch[i][3] / 255.)
-            action.append(mini_batch[i][1])
-            reward.append(mini_batch[i][2])
-            dead.append(mini_batch[i][4])
+            try:
+                history[i] = np.float32(mini_batch[i][0] / 255.)
+                next_history[i] = np.float32(mini_batch[i][3] / 255.)
+                action.append(mini_batch[i][1])
+                reward.append(mini_batch[i][2])
+                dead.append(mini_batch[i][4])
+            except Exception as e:
+                print("Training Failed!")
+                print(i, mini_batch[i])
+                print(i-1, mini_batch[i-1])
+                print(str(e))
+                sys.exit()
 
         value = self.model.predict(next_history)
         target_value = self.target_model.predict(next_history)
@@ -468,11 +475,12 @@ http://www.trex-game.skipser.com/.")
         pyautogui.keyUp('down') #unpress keys
         pyautogui.keyUp('space')
 
-        self.replay_memory(self._history,self.action,-10,self.history,True)
-        self.train_replay()
-        for _ in range(self.steps):
+        if self._history is not None:
+            self.replay_memory(self._history,self.action,-10,self.history,True)
             self.train_replay()
-        self.global_step += 1
+            for _ in range(self.steps):
+                self.train_replay()
+            self.global_step += 1
 
         with open(self.record,"a") as f:
             #Model, TimeStamp, Reward, Game_time, Steps, avg_q_max, avg_loss
