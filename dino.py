@@ -518,11 +518,12 @@ if __name__ == "__main__":
     # bot.basic_agent()
 
     # bot = Bot(explore=True)
-    bot= Bot()
+    bot= Bot(epsilon=0.01, learning_rate=0.05)
     bot.rl_agent(gif=True,grad_cam=True)
     for episode in range(1000):
         print('Episode: '+str(episode))
-        bot.rl_agent(replay=True)
+        bot.rl_agent()
+        # bot.rl_agent(replay=True)
         # bot.rl_agent(gif=True,grad_cam=True,replay=True)
         ga = bot.gameover_area
         ga = [ga["left"], ga["top"], ga["width"], ga["height"]]

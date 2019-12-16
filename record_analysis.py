@@ -12,13 +12,16 @@ print(df.head())
 # df.plot(y='avg_q_max', use_index=True)
 
 xaxis = ['index']
-yaxis = ['reward', 'time', 'steps', 'avg_q_max', 'avg_loss']
+# yaxis = ['reward', 'time', 'steps', 'avg_q_max', 'avg_loss']
+yaxis = ['steps', 'avg_q_max', 'avg_loss']
 for x in xaxis:
     for y in yaxis:
         fig, ax = plt.subplots(nrows=1, ncols=1)
         fig.suptitle(y)
         ax.set_ylabel(y)
+        ax.axhline(0, color='black')
         df.reset_index().plot.scatter(x=x, y=y, ax=ax)
+        # ax.set_xlim(xmin=8000)
         plt.show()
 
 # xaxis = ['time']
