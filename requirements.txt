@@ -17,7 +17,7 @@ Markdown==3.1.1
 MouseInfo==0.1.2
 mss==4.0.3
 multidict==4.5.2
-numpy==1.17.4
+numpy==1.22.0
 opencv-contrib-python==4.1.2.30
 Pillow==6.2.1
 protobuf==3.11.0
